@@ -3,7 +3,8 @@ import {libraryManager} from './library-manager.ts';
 import {parseWithLibrary} from './user-library.ts';
 import {librarySources} from './browser-library.ts';
 import {EditorView,basicSetup} from 'codemirror';
-import {StreamLanguage,syntaxHighlighting,defaultHighlightStyle} from '@codemirror/language';
+import {StreamLanguage,syntaxHighlighting,HighlightStyle} from '@codemirror/language';
+import {tags} from '@lezer/highlight';
 import {verilog} from '@codemirror/legacy-modes/mode/verilog';
 import {Diagnostic} from './parser.ts';
 import {synthesize} from './synthesis.ts';
@@ -91,6 +92,27 @@ const edgeExample=`module root(input pin1, output pin8);
     positive_edge_detector edge1(.in(pin1), .out(pin8));
 endmodule
 `;
+// Warm phosphor colours on the dark code screen, matching the shared theme.
+const lampHighlight=HighlightStyle.define([
+  {tag:tags.keyword,color:'#f0a43a'},
+  {tag:tags.comment,color:'#9c8c70',fontStyle:'italic'},
+  {tag:[tags.number,tags.bool,tags.atom],color:'#9fd3a8'},
+  {tag:[tags.string,tags.meta,tags.typeName,tags.definition(tags.variableName),tags.standard(tags.variableName)],color:'#e8c27a'},
+  {tag:tags.operator,color:'#ee8a73'},
+  {tag:[tags.bracket,tags.punctuation],color:'#a39478'},
+]);
+const lampTheme=EditorView.theme({
+  '&':{height:'300px',fontSize:'14px',color:'#eadbc0',backgroundColor:'#1a1611'},
+  '.cm-scroller':{fontFamily:"'IBM Plex Mono', Consolas, monospace",lineHeight:'1.7'},
+  '.cm-content':{padding:'14px 0',caretColor:'#f0a43a'},
+  '.cm-cursor, .cm-dropCursor':{borderLeftColor:'#f0a43a'},
+  '.cm-gutters':{backgroundColor:'#1a1611',color:'#7c6f5a',border:'none'},
+  '.cm-activeLine':{backgroundColor:'#f0a43a12'},
+  '.cm-activeLineGutter':{backgroundColor:'#f0a43a12',color:'#cdbe9e'},
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':{backgroundColor:'#f0a43a40'},
+  '.cm-selectionMatch':{backgroundColor:'#9fd3a826'},
+  '&.cm-focused .cm-matchingBracket':{backgroundColor:'#f0a43a33',outline:'none'},
+},{dark:true});
 const element=<T extends HTMLElement>(id:string)=>document.getElementById(id) as T;
 const status=element('status'),copy=element<HTMLButtonElement>('copy'),download=element<HTMLButtonElement>('download');
 const board=document.getElementById('board') as unknown as SVGSVGElement;
@@ -99,7 +121,7 @@ let revision=0,layout:Layout|undefined,legacy='';
 function invalidate(){revision++;layout=undefined;legacy='';copy.disabled=download.disabled=true;element<HTMLButtonElement>('apply').disabled=true;board.classList.add('stale');element('metrics').textContent='Нужно пересинтезировать';element('ast').textContent='';element('ir').textContent='';element('netlist').textContent='Исходный код изменён.';element('bindings').textContent='';element('manual').hidden=true;status.className='';status.textContent='Код изменён. Выполните синтез.';}
 let stored:string|null=null;try{stored=localStorage.getItem('kohctpyktop-verilog-source');}catch{}
 let needsTemplate=!stored;
-const view=new EditorView({parent:element('editor'),doc:stored??'module root ();\n\nendmodule\n',extensions:[basicSetup,StreamLanguage.define(verilog),syntaxHighlighting(defaultHighlightStyle),EditorView.contentAttributes.of({'aria-label':'Исходный код Verilog'}),EditorView.theme({'&':{height:'300px',fontSize:'14px'},'.cm-scroller':{fontFamily:'Consolas, monospace'},'.cm-content':{padding:'16px 0'},'.cm-gutters':{backgroundColor:'#f0f3f5',border:'none'}}),EditorView.updateListener.of(update=>{if(update.docChanged){invalidate();try{localStorage.setItem('kohctpyktop-verilog-source',update.state.doc.toString());}catch{}}})]});
+const view=new EditorView({parent:element('editor'),doc:stored??'module root ();\n\nendmodule\n',extensions:[basicSetup,StreamLanguage.define(verilog),syntaxHighlighting(lampHighlight),EditorView.contentAttributes.of({'aria-label':'Исходный код Verilog'}),lampTheme,EditorView.updateListener.of(update=>{if(update.docChanged){invalidate();try{localStorage.setItem('kohctpyktop-verilog-source',update.state.doc.toString());}catch{}}})]});
 const library=libraryManager(element('library-manager'),librarySources,invalidate);
 async function compile(){
   invalidate();const current=revision;status.textContent='Синтез и разводка…';

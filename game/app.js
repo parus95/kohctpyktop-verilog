@@ -20,7 +20,7 @@ function available(i){return $('#free').checked||levels.every((l,j)=>l.group>=le
 function renderLevels(){
   const nav=$('#levels');nav.replaceChildren();
   levels.forEach((l,i)=>{const b=document.createElement('button');b.className='level'+(i===index?' active':'')+(saved.completed.includes(i)?' done':'')+(i&&l.group!==levels[i-1].group?' group-start':'');b.disabled=!available(i);b.setAttribute('aria-current',String(i===index));b.dataset.level=i;
-    b.innerHTML='<span class="number">'+String(i+1).padStart(2,'0')+'</span><span><b>'+l.id+'</b><small>'+l.title+'</small></span><span class="mark">'+(saved.completed.includes(i)?'✓':b.disabled?'·':'')+'</span>';
+    b.innerHTML='<span class="number">'+String(i+1).padStart(2,'0')+'</span><span><b>'+l.id+'</b><small>'+l.title+'</small></span><i class="lamp'+(i===index?' amber':saved.completed.includes(i)?' green':'')+'" aria-hidden="true"></i><span class="sr-only">'+(saved.completed.includes(i)?'пройдено':b.disabled?'закрыто':'')+'</span>';
     b.onclick=()=>loadLevel(i);nav.append(b);
   });$('#progress').textContent=saved.completed.filter(i=>levels[i]).length+' / 19';
 }
@@ -29,14 +29,15 @@ function loadLevel(i){
   try{if(saved.designs[levels[i].id])canvas=decode(saved.designs[levels[i].id]);}catch(e){status('Сохранение задания не прочитано: '+e.message);}
   canvas.mainCanvasLock=true;canvas.AddConnectionPads();editor=new Editor(canvas);editor.showMetal=$('#show-metal').checked;
   undo=[];redo=[];selection=null;pasting=false;drag=null;last=null;reset();setTool(selectedTool);renderLevels();
-  $('#job-number').textContent='ЗАДАНИЕ '+String(i+1).padStart(2,'0');$('#job-title').textContent=levels[i].id;$('#job-description').textContent=levels[i].title;
+  $('#job-number').textContent='ЗАДАНИЕ '+String(i+1).padStart(2,'0');$('#job-title').textContent=levels[i].id;$('#plate-level').textContent=levels[i].id;$('#job-description').textContent=levels[i].title;
   const sc=$('#spec').getContext('2d');sc.fillStyle='white';sc.fillRect(0,0,640,240);sc.drawImage(images.get('spec_'+levels[i].id.toLowerCase()),0,400,640,240,0,0,640,240);
   draw();save();
 }
 function snapshot(){undo.push(encode(canvas));if(undo.length>100)undo.shift();redo=[];}
 function setCanvas(c){canvas=c;canvas.mainCanvasLock=true;canvas.AddConnectionPads();editor.canvas=canvas;reset();draw();save();}
 function history(back){if(drag)return;const from=back?undo:redo,to=back?redo:undo;if(!from.length)return;to.push(encode(canvas));setCanvas(decode(from.pop()));selection=null;draw();}
-function reset(){running=false;accumulator=0;sim=new Simulation(canvas,levels[index]);$('#run').innerHTML='▶ Проверить <kbd>Space</kbd>';$('#result').textContent='Готово к проверке';$('#result').className='';draw();}
+function result(text,state=''){$('#result').textContent=text;$('#result').className=state;$('#result-lamp').className='lamp'+({running:' amber',pass:' green',fail:' red'}[state]??'');}
+function reset(){running=false;accumulator=0;sim=new Simulation(canvas,levels[index]);$('#run').innerHTML='▶ Проверить <kbd>Space</kbd>';result('Готово к проверке');draw();}
 function edited(){reset();draw();save();}
 const configs={n:[0,false],p:[0,true],metal:[1,false],via:[2,false],select:[3,false],erase:[4,false]};
 function setTool(name){selectedTool=name;const [tool,alt]=configs[name];editor.tool=tool;editor.alternate=alt;pasting=false;if(tool!==3)selection=null;if(tool===1){editor.showMetal=true;$('#show-metal').checked=true;}$('[data-tool].active')?.classList.remove('active');$('[data-tool="'+name+'"]').classList.add('active');
@@ -49,20 +50,23 @@ function draw(){
   for(let p=0;p<6;p++){const y=42+52*p;ctx.fillText(p===0||p===5?'+VCC':levels[index].pins[p-1].name,35,y);ctx.fillText(p===0||p===5?'+VCC':levels[index].pins[p+3].name,542,y);}
   const r=rect();if(r){ctx.fillStyle='#ffffff25';ctx.fillRect(4+r.x*13,4+r.y*13,r.w*13,r.h*13);ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.strokeRect(4+r.x*13,4+r.y*13,r.w*13,r.h*13);ctx.setLineDash([]);}
   if(pasting&&clipboard&&last){ctx.save();ctx.globalAlpha=.65;clipboard.Draw(ctx,4+last.x*13,4+last.y*13,true);ctx.restore();}
-  $('#score').textContent=canvas.ScoreDesign();$('#undo').disabled=!undo.length;$('#redo').disabled=!redo.length;
+  showScore(canvas.ScoreDesign());$('#undo').disabled=!undo.length;$('#redo').disabled=!redo.length;
   $('#copy').disabled=$('#cut').disabled=$('#delete').disabled=!selection;$('#paste').disabled=!clipboard;
   if(sim)drawSignals();
 }
-function drawSignals(){const g=$('#signals').getContext('2d'),width=560/levels[index].length;g.fillStyle='#fff';g.fillRect(0,0,640,248);g.font='11px monospace';
-  function trace(values,y,color){g.strokeStyle=color;g.lineWidth=1;g.beginPath();let previous=false;values.forEach((v,t)=>{const x=65+t*width;if(!t)g.moveTo(x,y-(v?15:0));else if(v!==previous)g.lineTo(x,y-(v?15:0));g.lineTo(x+width,y-(v?15:0));previous=v;});g.stroke();}
-  sim.signals.forEach((s,i)=>{const y=28+i*29;g.strokeStyle='#eeeee8';g.beginPath();g.moveTo(65,y);g.lineTo(625,y);g.stroke();g.fillStyle='#343830';g.fillText(s.name+(s.output?' →':''),5,y-4);trace(s.pattern,y,'#a6ada5');trace(s.values,y,s.output?'#a83428':'#39786c');});
-  if(sim.time){g.strokeStyle='#497586';g.beginPath();g.moveTo(65+sim.time*width,2);g.lineTo(65+sim.time*width,239);g.stroke();}$('#tick').textContent=sim.time+' / '+levels[index].length+' тактов';
+function showScore(value){const el=$('#score'),text=String(value);if(el.dataset.value===text)return;el.dataset.value=text;const digits=text.padStart(4,'0');
+  el.replaceChildren(...[...digits].map((d,k)=>{const s=document.createElement('span');s.textContent=d;if(k<digits.length-text.length)s.className='off';return s;}));el.setAttribute('aria-label','Площадь схемы: '+text);}
+function drawSignals(){const g=$('#signals').getContext('2d'),width=560/levels[index].length;g.fillStyle='#15110c';g.fillRect(0,0,640,248);g.font='11px "IBM Plex Mono", monospace';
+  g.strokeStyle='#f0a43a14';for(let x=65;x<=625;x+=56){g.beginPath();g.moveTo(x,4);g.lineTo(x,240);g.stroke();}
+  function trace(values,y,color,dash=[]){g.strokeStyle=color;g.lineWidth=dash.length?1:1.5;g.setLineDash(dash);g.shadowColor=color;g.shadowBlur=dash.length?0:4;g.beginPath();let previous=false;values.forEach((v,t)=>{const x=65+t*width;if(!t)g.moveTo(x,y-(v?15:0));else if(v!==previous)g.lineTo(x,y-(v?15:0));g.lineTo(x+width,y-(v?15:0));previous=v;});g.stroke();g.setLineDash([]);g.shadowBlur=0;}
+  sim.signals.forEach((s,i)=>{const y=28+i*29;g.strokeStyle='#2e2820';g.beginPath();g.moveTo(65,y);g.lineTo(625,y);g.stroke();g.fillStyle='#cdbe9e';g.fillText(s.name+(s.output?' →':''),5,y-4);trace(s.pattern,y,'#7c6f5a',[4,3]);trace(s.values,y,s.output?'#f0a43a':'#d9c9a6');});
+  if(sim.time){g.strokeStyle='#7fc28a';g.beginPath();g.moveTo(65+sim.time*width,2);g.lineTo(65+sim.time*width,239);g.stroke();}$('#tick').textContent=sim.time+' / '+levels[index].length+' тактов';
 }
 function tab(name){$$('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name)));$$('[role=tabpanel]').forEach(p=>p.hidden=p.id!=='panel-'+name);drawSignals();}
-function finish(){running=false;$('#run').innerHTML='▶ Ещё раз <kbd>Space</kbd>';const passed=sim.rate>=97;$('#result').textContent=(passed?'ПРОВЕРКА ПРОЙДЕНА':'ТРЕБУЕТСЯ ДОРАБОТКА')+' · '+sim.rate.toFixed(1)+'% совпадения';$('#result').className=passed?'pass':'fail';
+function finish(){running=false;$('#run').innerHTML='▶ Ещё раз <kbd>Space</kbd>';const passed=sim.rate>=97;result((passed?'ПРОВЕРКА ПРОЙДЕНА':'ТРЕБУЕТСЯ ДОРАБОТКА')+' · '+sim.rate.toFixed(1)+'% совпадения',passed?'pass':'fail');
   if(passed&&!saved.completed.includes(index)){saved.completed.push(index);save();renderLevels();if(saved.completed.length===19)$('#win-dialog').showModal();}draw();
 }
-function toggleRun(){tab('signals');if(sim.done)reset();running=!running;$('#run').textContent=running?'Ⅱ Пауза':'▶ Продолжить';if(running){$('#result').textContent='Проверка выполняется…';$('#result').className='';}}
+function toggleRun(){tab('signals');if(sim.done)reset();running=!running;$('#run').textContent=running?'Ⅱ Пауза':'▶ Продолжить';result(running?'Проверка выполняется…':'Пауза · такт '+sim.time,running?'running':'');}
 function frame(now){if(running){accumulator+=Math.min(now-lastFrame,100)*Number($('#speed').value)/1000;let n=Math.floor(accumulator);accumulator-=n;while(n-->0&&!sim.done)sim.step();if(sim.done)finish();draw();}lastFrame=now;requestAnimationFrame(frame);}
 function cell(e){const r=board.getBoundingClientRect();return{x:Math.floor(((e.clientX-r.left)*580/r.width-4)/13),y:Math.floor(((e.clientY-r.top)*360/r.height-4)/13)};}
 const inside=p=>p.x>=0&&p.x<44&&p.y>=0&&p.y<27;
@@ -113,13 +117,13 @@ async function start(){
   $('#free').onchange=()=>{renderLevels();save();};$('#show-metal').onchange=()=>{editor.showMetal=$('#show-metal').checked;draw();};
   $('#undo').onclick=()=>history(true);$('#redo').onclick=()=>history(false);$('#copy').onclick=()=>copy();$('#cut').onclick=()=>copy(true);$('#paste').onclick=paste;$('#delete').onclick=deleteSelection;
   $('#clear').onclick=()=>$('#confirm-dialog').showModal();$('#confirm-clear').onclick=()=>{snapshot();setCanvas(fresh());selection=null;$('#confirm-dialog').close();draw();};
-  $('#run').onclick=toggleRun;$('#reset').onclick=reset;$('#step').onclick=()=>{tab('signals');running=false;if(sim.done)reset();sim.step();$('#run').textContent='▶ Продолжить';if(sim.done)finish();else $('#result').textContent='Пауза · такт '+sim.time;draw();};
+  $('#run').onclick=toggleRun;$('#reset').onclick=reset;$('#step').onclick=()=>{tab('signals');running=false;if(sim.done)reset();sim.step();$('#run').textContent='▶ Продолжить';if(sim.done)finish();else result('Пауза · такт '+sim.time);draw();};
   $('#snippet-form').onsubmit=e=>{e.preventDefault();const r=rect();if(!r){status('Сначала выделите часть схемы.');return;}const c=canvas.CopySelection(r.x,r.y,r.w,r.h);saved.snippets.push({name:$('#snippet-name').value.trim()||'Фрагмент',data:encode(c)});$('#snippet-name').value='';persist();renderSnippets();status('Фрагмент сохранён.');};renderSnippets();
   $('#export').onclick=()=>download(encode(canvas),'json');$('#export-flash').onclick=async()=>{try{download(await exportLegacy(canvas),'txt');}catch(e){status('Экспорт не выполнен: '+e.message);}};
   $('#import').onclick=()=>$('#file').click();$('#file').onchange=async()=>{const f=$('#file').files[0];if(f){if(f.size>300000)status('Файл слишком большой');else await importText(await f.text());}$('#file').value='';};
   $('#paste-code').onclick=()=>{$('#code').value='';$('#code-dialog').showModal();};$('#load-code').onclick=()=>importText($('#code').value);
   $('#help').onclick=()=>{$('#help-dialog').showModal();drawHelp();};$('#help-prev').onclick=()=>{helpPage=(helpPage+2)%3;drawHelp();};$('#help-next').onclick=()=>{helpPage=(helpPage+1)%3;drawHelp();};$$('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());
-  const music=new Audio('assets/music.mp3');music.loop=true;music.volume=.45;$('#music').onclick=async()=>{try{if(music.paused){await music.play();$('#music').setAttribute('aria-pressed','true');$('#music').textContent='♫ Выключить';}else{music.pause();$('#music').setAttribute('aria-pressed','false');$('#music').textContent='♫ Музыка';}}catch{status('Не удалось воспроизвести музыку.');}};
+  const music=new Audio('assets/music.mp3');music.loop=true;music.volume=.45;$('#music').onclick=async()=>{try{if(music.paused)await music.play();else music.pause();$('#music').setAttribute('aria-pressed',String(!music.paused));$('#music .lamp').classList.toggle('amber',!music.paused);}catch{status('Не удалось воспроизвести музыку.');}};
   document.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)||$('dialog[open]'))return;
     if(e.key==='Escape'){pasting=false;selection=null;draw();return;}
     if(e.ctrlKey||e.metaKey){const key=e.key.toLowerCase();if(['z','y','c','x','v','s'].includes(key)){e.preventDefault();if(key==='z')history(!e.shiftKey);if(key==='y')history(false);if(key==='c')copy();if(key==='x')copy(true);if(key==='v')paste();if(key==='s'){save();status('Схема сохранена.');}}return;}

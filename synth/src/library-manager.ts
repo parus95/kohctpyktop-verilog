@@ -27,7 +27,7 @@ export function libraryManager(host:HTMLElement,system:Record<string,string>,cha
   title.value=isSystem?id!.split('/').pop()!:draft?.name??entry?.name??'module.v';
   source.value=isSystem?system[id!]:draft?.source??entry?.source??'module custom(input a, output z);\n\nendmodule\n';
   title.readOnly=source.readOnly=isSystem;save.hidden=isSystem;duplicate.hidden=!isSystem;remove.hidden=isSystem||!entry;
-  kind.textContent=isSystem?'Системный · только чтение':'Пользовательский';render();
+  kind.textContent=isSystem?'Системный · только чтение':'Пользовательский';kind.className='library-kind'+(isSystem?' readonly':'');render();
  }
  function render(){
   list.replaceChildren();
@@ -36,7 +36,7 @@ export function libraryManager(host:HTMLElement,system:Record<string,string>,cha
    const item=node('div','library-row'+(selected===id&&systemSelected===isSystem?' selected':'')+(enabled?'':' inactive'));
    const choose=button('',()=>select(id,isSystem),'library-select');choose.setAttribute('aria-pressed',String(selected===id&&systemSelected===isSystem));
    const nameEl=node('strong'),meta=node('small');nameEl.textContent=name;meta.textContent=isSystem?'Системный':'Пользовательский';choose.append(nameEl,meta);
-   const toggle=node('input');toggle.type='checkbox';toggle.checked=enabled;toggle.setAttribute('aria-label','Включить '+name);
+   const toggle=node('input');toggle.type='checkbox';toggle.className='switch';toggle.checked=enabled;toggle.setAttribute('aria-label','Включить '+name);
    toggle.onchange=()=>{if(isSystem){state.enabledSystem=state.enabledSystem.filter(n=>n!==id);if(toggle.checked)state.enabledSystem.push(id);}else state.users.find(e=>e.id===id)!.enabled=toggle.checked;persist();};
    item.append(choose,toggle);list.append(item);
   };

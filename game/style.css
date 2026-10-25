@@ -96,6 +96,28 @@ nav{display:flex;flex-direction:column;gap:2px}
 #result.running{color:#f3d9a4}
 #result.pass{color:#a8ddb0;font-weight:500}
 #result.fail{color:#f2a898}
+/* Tutorial coach: a teletype card under the board, plus an amber ring on the control the step asks for. */
+.coach{display:flex;gap:16px;align-items:flex-start;margin-top:14px;padding:14px 16px;color:var(--on-dark);background:var(--screen);border:1px solid var(--amber);border-radius:8px;box-shadow:0 0 22px -6px #f0a43a80}
+.coach-portrait{display:flex;flex-shrink:0;align-items:center;justify-content:center;width:56px;height:68px;font:700 22px var(--serif);color:var(--muted);background:#d8ccb0;border:3px solid var(--raised)}
+.coach-body{flex:1;min-width:0}
+.coach-head{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font:10px var(--mono);letter-spacing:2px;color:#f0b861}
+.coach-head #coach-title{color:var(--on-dark-muted)}
+.coach-steps{display:inline-flex;gap:5px;margin-left:auto}
+#coach-text{margin:6px 0 0;font:15px/1.55 var(--serif)}
+#coach-hint{margin:8px 0 0;font-size:13px;color:#f6c6bb}
+.coach-goal{margin:8px 0 0;font:12px var(--mono);color:var(--on-dark-muted)}
+.coach-goal::before{content:'› '}
+.coach-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.coach-actions button{min-height:36px;color:var(--on-dark);background:var(--bakelite-raised);border-color:var(--bakelite-line);box-shadow:0 2px 0 #0e0b08}
+.coach-actions button:hover{background:#3a3329}
+.coach-actions button.primary{color:#fff6e6;background:var(--red);border-color:var(--red-deep);box-shadow:0 3px 0 #4a1610}
+.coach-actions .coach-skip{margin-left:auto;color:#c9b996;background:transparent;border-color:transparent;box-shadow:none}
+.coach-target{position:relative;z-index:1;box-shadow:0 0 0 3px var(--amber),0 0 16px 3px #f0a43a99!important;animation:coach-pulse 1.6s ease-in-out infinite}
+@keyframes coach-pulse{50%{box-shadow:0 0 0 3px var(--amber),0 0 4px 1px #f0a43a55}}
+@media(prefers-reduced-motion:reduce){.coach-target{animation:none}}
+/* On wide screens the coach floats over the bottom of the level list, so it stays in view while drawing. */
+@media(min-width:1100px){.coach{position:fixed;z-index:5;left:max(16px,calc((100vw - 1360px) / 2));bottom:16px;width:290px;max-height:calc(100vh - 32px);overflow:auto;margin:0;box-shadow:0 0 22px -6px #f0a43a80,0 18px 40px -12px #000a}.coach-portrait{display:none}#coach-text{font-size:14px}.coach-steps{margin-left:0;flex-basis:100%}}
+.help-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;margin-top:16px}
 #status{min-height:20px;margin:14px 4px 22px;font:12px var(--mono);color:var(--ink-soft)}
 #status::before{content:'› '}
 

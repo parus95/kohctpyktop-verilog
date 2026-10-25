@@ -6,9 +6,10 @@ import {levels} from './levels.js';
 import {assets} from './assets.js';
 import {images,Raster} from './runtime.js';
 import {encode,decode,importLegacy,exportLegacy} from './storage.js';
+import {createTutorial} from './tutorial.js';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const board=$('#board'),ctx=board.getContext('2d');ctx.imageSmoothingEnabled=false;
-let saved={designs:{},completed:[],snippets:[],current:0,free:false};
+let saved={designs:{},completed:[],snippets:[],current:0,free:false,tutorial:null};
 let storageWarning='';
 try{const raw=localStorage.getItem('kohctpyktop-js-v1');if(raw){const v=JSON.parse(raw);if(v&&typeof v.designs==='object'&&Array.isArray(v.completed)&&Array.isArray(v.snippets))saved={...saved,...v};else throw Error();}}catch{storageWarning='Сохранение недоступно или повреждено. Используйте экспорт файла.';}
 let index=0,canvas,editor,sim,running=false,selectedTool='n',selection=null,clipboard=null,pasting=false,drag=null,last=null,undo=[],redo=[],helpPage=0,lastFrame=0,accumulator=0;
@@ -31,21 +32,21 @@ function loadLevel(i){
   undo=[];redo=[];selection=null;pasting=false;drag=null;last=null;reset();setTool(selectedTool);renderLevels();
   $('#job-number').textContent='ЗАДАНИЕ '+String(i+1).padStart(2,'0');$('#job-title').textContent=levels[i].id;$('#plate-level').textContent=levels[i].id;$('#job-description').textContent=levels[i].title;
   const sc=$('#spec').getContext('2d');sc.fillStyle='white';sc.fillRect(0,0,640,240);sc.drawImage(images.get('spec_'+levels[i].id.toLowerCase()),0,400,640,240,0,0,640,240);
-  draw();save();
+  draw();save();tutorial.level();
 }
 function snapshot(){undo.push(encode(canvas));if(undo.length>100)undo.shift();redo=[];}
-function setCanvas(c){canvas=c;canvas.mainCanvasLock=true;canvas.AddConnectionPads();editor.canvas=canvas;reset();draw();save();}
+function setCanvas(c){canvas=c;canvas.mainCanvasLock=true;canvas.AddConnectionPads();editor.canvas=canvas;reset();draw();save();tutorial.changed();}
 function history(back){if(drag)return;const from=back?undo:redo,to=back?redo:undo;if(!from.length)return;to.push(encode(canvas));setCanvas(decode(from.pop()));selection=null;draw();}
 function result(text,state=''){$('#result').textContent=text;$('#result').className=state;$('#result-lamp').className='lamp'+({running:' amber',pass:' green',fail:' red'}[state]??'');}
 function reset(){running=false;accumulator=0;sim=new Simulation(canvas,levels[index]);$('#run').innerHTML='▶ Проверить <kbd>Space</kbd>';result('Готово к проверке');draw();}
-function edited(){reset();draw();save();}
+function edited(){reset();draw();save();tutorial.changed();}
 const configs={n:[0,false],p:[0,true],metal:[1,false],via:[2,false],select:[3,false],erase:[4,false]};
 function setTool(name){selectedTool=name;const [tool,alt]=configs[name];editor.tool=tool;editor.alternate=alt;pasting=false;if(tool!==3)selection=null;if(tool===1){editor.showMetal=true;$('#show-metal').checked=true;}$('[data-tool].active')?.classList.remove('active');$('[data-tool="'+name+'"]').classList.add('active');
   status({n:'N-кремний: рисуйте непрерывную линию. Shift — P-кремний.',p:'P-кремний: пересечение с N создаёт транзистор. Shift — N.',metal:'Металл соединяет выводы платы. Для связи с кремнием поставьте контакт.',via:'Контакт ставится на кремнии, под металлическим проводником.',select:'Выделите прямоугольник. Перетаскивание перемещает его; Shift копирует.',erase:'Стирание кремния. Удерживайте Shift для стирания металла.'}[name]);draw();
 }
 function rect(){if(!selection)return null;const {a,b}=selection;return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x)+1,h:Math.abs(a.y-b.y)+1};}
 function draw(){
-  if(!canvas)return;ctx.clearRect(0,0,580,360);Raster.Blit(ctx,'img_background');canvas.Draw(ctx,4,4,editor?.showMetal??true);Raster.Blit(ctx,'img_pads');if(!editor?.showMetal)Raster.Blit(ctx,'img_fakepads');
+  if(!canvas)return;ctx.clearRect(0,0,580,360);Raster.Blit(ctx,'img_background');canvas.Draw(ctx,4,4,editor?.showMetal??true);Raster.Blit(ctx,'img_pads');if(!editor?.showMetal)Raster.Blit(ctx,'img_fakepads');tutorial.drawGhost(ctx);
   ctx.textAlign='center';ctx.textBaseline='top';ctx.font='10px Georgia';ctx.fillStyle='#111';
   for(let p=0;p<6;p++){const y=42+52*p;ctx.fillText(p===0||p===5?'+VCC':levels[index].pins[p-1].name,35,y);ctx.fillText(p===0||p===5?'+VCC':levels[index].pins[p+3].name,542,y);}
   const r=rect();if(r){ctx.fillStyle='#ffffff25';ctx.fillRect(4+r.x*13,4+r.y*13,r.w*13,r.h*13);ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.strokeRect(4+r.x*13,4+r.y*13,r.w*13,r.h*13);ctx.setLineDash([]);}
@@ -64,9 +65,9 @@ function drawSignals(){const g=$('#signals').getContext('2d'),width=560/levels[i
 }
 function tab(name){$$('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name)));$$('[role=tabpanel]').forEach(p=>p.hidden=p.id!=='panel-'+name);drawSignals();}
 function finish(){running=false;$('#run').innerHTML='▶ Ещё раз <kbd>Space</kbd>';const passed=sim.rate>=97;result((passed?'ПРОВЕРКА ПРОЙДЕНА':'ТРЕБУЕТСЯ ДОРАБОТКА')+' · '+sim.rate.toFixed(1)+'% совпадения',passed?'pass':'fail');
-  if(passed&&!saved.completed.includes(index)){saved.completed.push(index);save();renderLevels();if(saved.completed.length===19)$('#win-dialog').showModal();}draw();
+  if(passed&&!saved.completed.includes(index)){saved.completed.push(index);save();renderLevels();if(saved.completed.length===19)$('#win-dialog').showModal();}draw();tutorial.finished(passed);
 }
-function toggleRun(){tab('signals');if(sim.done)reset();running=!running;$('#run').textContent=running?'Ⅱ Пауза':'▶ Продолжить';result(running?'Проверка выполняется…':'Пауза · такт '+sim.time,running?'running':'');}
+function toggleRun(){tab('signals');if(sim.done)reset();running=!running;$('#run').textContent=running?'Ⅱ Пауза':'▶ Продолжить';result(running?'Проверка выполняется…':'Пауза · такт '+sim.time,running?'running':'');if(running)tutorial.started();}
 function frame(now){if(running){accumulator+=Math.min(now-lastFrame,100)*Number($('#speed').value)/1000;let n=Math.floor(accumulator);accumulator-=n;while(n-->0&&!sim.done)sim.step();if(sim.done)finish();draw();}lastFrame=now;requestAnimationFrame(frame);}
 function cell(e){const r=board.getBoundingClientRect();return{x:Math.floor(((e.clientX-r.left)*580/r.width-4)/13),y:Math.floor(((e.clientY-r.top)*360/r.height-4)/13)};}
 const inside=p=>p.x>=0&&p.x<44&&p.y>=0&&p.y<27;
@@ -131,6 +132,9 @@ async function start(){
   });
   window.addEventListener('beforeunload',save);document.documentElement.dataset.ready='true';status(storageWarning||'Готово. Выберите материал и рисуйте на плате. Справка — в правом верхнем углу.');requestAnimationFrame(frame);
 }
+const tutorial=createTutorial({state:saved.tutorial,canvas:()=>canvas,level:()=>levels[index],index:()=>index,completed:()=>saved.completed,redraw:()=>draw(),loadLevel,
+  persist:value=>{saved.tutorial=value;persist();},clear:()=>{if(canvas.ScoreDesign()>0){snapshot();setCanvas(fresh());selection=null;status('Схема очищена для обучения. Ctrl+Z вернёт её.');}}});
+$('#tutorial-restart').onclick=()=>{$('#help-dialog').close();tutorial.restart();};
 start().catch(e=>{status('Ошибка запуска: '+e.message);console.error(e);});
 
 const synthDialog=$('#synth-dialog'),synthFrame=$('#synth-frame');

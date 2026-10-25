@@ -7,6 +7,7 @@ try {
  await page.goto(process.env.APP_URL??'http://127.0.0.1:5174/');
  await page.waitForFunction(()=>document.querySelector('#job-title').textContent==='KT411I');
  assert.equal(await page.locator('.original-link').count(),1);
+ assert.match(await page.locator('#coach-title').innerText(),/Шаг 1 из 8/);await page.click('#coach-skip');assert.equal(await page.locator('#coach').isVisible(),false);
  await page.click('#open-synth');const frame=page.frameLocator('#synth-frame');
  await frame.locator('#new-module').click();
  await page.waitForFunction(()=>document.querySelector('#synth-frame').contentDocument.querySelector('.cm-content').textContent.includes('A0'));
